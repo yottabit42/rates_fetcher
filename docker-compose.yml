@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Using a volume mount for scripts, input, and output files as requested
+    volumes:
+      - /mnt/vol1/docker/data/rates_fetcher:/app
+    # Run the cron daemon continuously
+    restart: unless-stopped
+
+  server:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes:
+      - /mnt/vol1/docker/data/rates_fetcher:/app
+    networks:
+      - proxy
+    ports:
+      - "57275:57275"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.rates_fetcher.rule=Host(`rf.mcawesome.org`)
+      - traefik.http.routers.rates_fetcher.entrypoints=http
+      - traefik.http.routers.rates_fetcher.tls=false
+      - traefik.http.services.rates_fetcher.loadbalancer.server.port=57275
+      - traefik.docker.network=proxy
+    # Execute the server script on port 57275
+    command: ["bash", "./run_server.sh", "57275"]
+    restart: unless-stopped
+
+networks:
+  proxy:
+    external: true
