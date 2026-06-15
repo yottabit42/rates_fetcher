@@ -4,7 +4,7 @@
 pip install rebrowser-playwright
 
 # Ensure chromium is installed for playwright (using --with-deps for linux environments if not in Docker)
-rebrowser-playwright install --with-deps chromium
+playwright install --with-deps chromium
 
 # Run the python script
 python3 scrape.py targets.tsv
