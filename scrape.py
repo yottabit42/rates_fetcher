@@ -53,11 +53,11 @@ def main():
 
             text = None
             try:
-                page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                page.goto(url, wait_until="domcontentloaded", timeout=10000)
 
                 # Removing trailing text() or text()[n] so wait_for_selector works
                 wait_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
-                page.wait_for_selector(f"xpath={wait_xpath}", timeout=30000)
+                page.wait_for_selector(f"xpath={wait_xpath}", timeout=10000)
 
                 js_code = f"""
                 () => {{
@@ -75,7 +75,7 @@ def main():
                         "Accept-Language": "en-US,en;q=0.9",
                         "Cache-Control": "max-age=0",
                     }
-                    response = requests.get(url, headers=headers, impersonate="chrome", timeout=30)
+                    response = requests.get(url, headers=headers, impersonate="chrome", timeout=10)
 
                     if response.status_code == 200:
                         tree = html.fromstring(response.text)
