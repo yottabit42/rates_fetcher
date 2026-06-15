@@ -21,9 +21,14 @@ def main():
 
     with sync_playwright() as p:
         # Chromium requires --no-sandbox to run as root inside a Docker container
-        browser = p.chromium.launch(args=["--no-sandbox"])
-        context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36")
-        page = context.new_page()
+        # Use a persistent context to bypass strict anti-bot protections by mimicking a localized user profile
+        context = p.chromium.launch_persistent_context(
+            user_data_dir="/tmp/playwright_user_data",
+            headless=True,
+            args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        page = context.pages[0]
 
         for line in lines:
             line = line.strip()
@@ -71,7 +76,7 @@ def main():
             except Exception as e:
                 print(f"  Error processing {filename}: {e}")
 
-        browser.close()
+        context.close()
 
 if __name__ == "__main__":
     main()
