@@ -5,11 +5,7 @@ A robust web scraping automation project designed to extract data points (such a
 ## Overview
 
 The system consists of two main components:
-1. **Scraper:** A highly resilient Python script (`scrape.py`) driven by `rebrowser-playwright` that parses a TSV file (`targets.tsv`). It uses persistent, localized browser profiles to defeat aggressive CDNs and dynamically evaluates XPaths within the browser DOM to extract financial rates. To ensure fault tolerance, the scraper:
-   - Evaluates up to 3 fallback mechanisms per target (Playwright -> `curl_cffi` TLS Spoofing -> Fidelity Legacy JSONP APIs).
-   - Operates on a 3-attempt retry loop per target.
-   - Preserves previously saved data by strictly skipping output overwrites if a target explicitly fails.
-   - Throttles requests by pausing for 10 seconds between targets to avoid bot-detection triggers.
+1. **Scraper:** A Python script (`scrape.py`) driven by Playwright that parses a TSV file (`targets.tsv`), navigates to specific URLs, evaluates XPaths within the browser context, and writes the output to individually named text files.
 2. **Server:** A custom Python web server (`server.py`) that securely serves only the generated `.txt` files on port 57275. It actively blocks path traversal attacks and prevents access to source code or configuration files.
 
 ## Project Structure

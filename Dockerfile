@@ -9,10 +9,7 @@ ENV PYTHONUNBUFFERED=1
 RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
 
 # Install pip dependencies
-RUN pip install --no-cache-dir rebrowser-playwright curl_cffi lxml beautifulsoup4 requests
-
-# Install playwright browsers and their OS-level dependencies
-RUN python3 -m rebrowser_playwright install --with-deps chromium
+RUN pip install --no-cache-dir curl_cffi lxml beautifulsoup4 requests
 
 # Setup cron job to run at noon every day
 # We inject the current PATH so cron can find python3 and pip
