@@ -2,6 +2,8 @@ import sys
 import re
 from datetime import date
 from rebrowser_playwright.sync_api import sync_playwright
+from curl_cffi import requests
+from lxml import html
 
 def main():
     if len(sys.argv) != 2:
@@ -49,6 +51,7 @@ def main():
 
             print(f"Processing {filename} from {url}...")
 
+            text = None
             try:
                 page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
@@ -64,17 +67,44 @@ def main():
                 """
                 text = page.evaluate(js_code)
 
-                if text is not None:
-                    text = text.strip().rstrip('%').strip()
-                else:
-                    text = "N/A"
-
-                with open(f"{filename}.txt", "w") as out_f:
-                    out_f.write(f"{today}\n{text}\n")
-
-                print(f"  Success: Extracted '{text}' and saved to {filename}.txt")
             except Exception as e:
-                print(f"  Error processing {filename}: {e}")
+                print(f"  Playwright failed for {filename} ({e}). Falling back to curl_cffi...")
+                try:
+                    headers = {
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                        "Accept-Language": "en-US,en;q=0.9",
+                        "Cache-Control": "max-age=0",
+                    }
+                    response = requests.get(url, headers=headers, impersonate="chrome", timeout=30)
+
+                    if response.status_code == 200:
+                        tree = html.fromstring(response.text)
+
+                        # Evaluate the exact xpath against the raw HTML
+                        nodes = tree.xpath(xpath)
+                        if nodes:
+                            # lxml xpath can return a string directly if the xpath ends in text(),
+                            # or it can return an Element.
+                            if isinstance(nodes[0], str):
+                                text = nodes[0]
+                            else:
+                                text = nodes[0].text_content()
+                        else:
+                            print(f"  XPath '{xpath}' not found in raw HTML payload for {filename}.")
+                    else:
+                        print(f"  curl_cffi failed with status code: {response.status_code}")
+                except Exception as ex:
+                    print(f"  curl_cffi fallback also failed: {ex}")
+
+            if text is not None:
+                text = text.strip().rstrip('%').strip()
+            else:
+                text = "N/A"
+
+            with open(f"{filename}.txt", "w") as out_f:
+                out_f.write(f"{today}\n{text}\n")
+
+            print(f"  Success: Extracted '{text}' and saved to {filename}.txt")
 
         context.close()
 

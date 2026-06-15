@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1
 RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
 
 # Install pip dependencies (using Rebrowser to bypass strict anti-bot protections)
-RUN pip install --no-cache-dir rebrowser-playwright
+RUN pip install --no-cache-dir rebrowser-playwright curl_cffi lxml beautifulsoup4
 
 # Install playwright browsers and their OS-level dependencies
 RUN python3 -m rebrowser_playwright install --with-deps chromium
