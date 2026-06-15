@@ -1,8 +1,10 @@
 import sys
 import re
+import json
 from datetime import date
 from rebrowser_playwright.sync_api import sync_playwright
 from curl_cffi import requests
+import requests as std_requests
 from lxml import html
 
 def main():
@@ -95,6 +97,30 @@ def main():
                         print(f"  curl_cffi failed with status code: {response.status_code}")
                 except Exception as ex:
                     print(f"  curl_cffi fallback also failed: {ex}")
+
+            # Third fallback specific to Fidelity targets
+            if text is None and 'fidelity.com' in url.lower():
+                print(f"  Attempting Fidelity Legacy JSON API fallback for {filename}...")
+                try:
+                    fq_url = f"https://fastquote.fidelity.com/service/quote/json?productid=embeddedquotes&symbols={filename}"
+                    fq_headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    }
+                    fq_response = std_requests.get(fq_url, headers=fq_headers, timeout=10)
+                    if fq_response.status_code == 200:
+                        # Strip the leading '(' and trailing ')' from JSONP response
+                        clean_json = fq_response.text.strip()[1:-1]
+                        data = json.loads(clean_json)
+                        if "QUOTES" in data and filename in data["QUOTES"]:
+                            text = data["QUOTES"][filename].get("YIELD_7_DAY")
+                            if not text:
+                                print(f"  JSON API response did not contain YIELD_7_DAY for {filename}.")
+                        else:
+                            print(f"  JSON API response missing expected QUOTES payload for {filename}.")
+                    else:
+                        print(f"  Fidelity Legacy JSON API failed with status code: {fq_response.status_code}")
+                except Exception as ex:
+                    print(f"  Fidelity Legacy JSON API fallback failed: {ex}")
 
             if text is not None:
                 text = text.strip().rstrip('%').strip()
