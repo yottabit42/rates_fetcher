@@ -56,7 +56,12 @@ This `docker-compose.yml` file is configured with routing labels for a Traefik r
    ```
    This will start both the continuously running `server` and the `scraper` container.
 
-2. **Scraper Schedule:**
+   The `Dockerfile` needs to be located in a location as expected by your stack. For example, if using Dockge, the `Dockerfile` should be copied or moved to the Dockge stack path for the container. The Docker container will automatically build on first start, but it can also be manually rebuilt using the following command:
+   ```bash
+   docker compose build --no-cache
+   ```
+
+3. **Scraper Schedule:**
    The `scraper` will run automatically the moment the container starts, and it's also scheduled via `cron` to run every day at noon (in the local container timezone, typically UTC). Output will be saved to your mounted host directory.
 
 ## Licensing
