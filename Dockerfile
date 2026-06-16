@@ -9,7 +9,7 @@ ENV PYTHONUNBUFFERED=1
 RUN apt-get update && apt-get install -y cron && rm -rf /var/lib/apt/lists/*
 
 # Install pip dependencies
-RUN pip install --no-cache-dir playwright
+RUN pip install --no-cache-dir rebrowser_playwright curl_cffi lxml requests
 
 # Install playwright browsers and their OS-level dependencies
 RUN playwright install --with-deps chromium
