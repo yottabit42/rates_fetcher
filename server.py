@@ -12,7 +12,7 @@ class SecureHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         translated = self.translate_path(self.path)
         # We only want to serve data.out
         if not translated.endswith('data.out'):
-            self.send_error(403, "Forbidden: Only data.out is allowed.")
+            self.send_error(403, "Forbidden.")
             return False
         return True
 
