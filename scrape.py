@@ -13,6 +13,9 @@ def main():
         print("Usage: python3 scrape.py <targets.tsv>")
         sys.exit(1)
 
+    import os
+    import csv
+
     targets_file = sys.argv[1]
 
     try:
@@ -23,6 +26,19 @@ def main():
         sys.exit(1)
 
     today = date.today().strftime("%Y-%m-%d")
+    data_out_file = "data.out"
+
+    # Load existing data to preserve failed iterations
+    existing_data = {}
+    if os.path.exists(data_out_file):
+        try:
+            with open(data_out_file, 'r', newline='') as f:
+                reader = csv.reader(f)
+                for row in reader:
+                    if len(row) >= 3:
+                        existing_data[row[0]] = {"date": row[1], "value": row[2]}
+        except Exception as e:
+            print(f"Warning: Could not parse existing data.out ({e})")
 
     with sync_playwright() as p:
         # Chromium requires --no-sandbox to run as root inside a Docker container
@@ -134,16 +150,25 @@ def main():
 
             if text is not None:
                 text = text.strip().rstrip('%').strip()
-                with open(f"{filename}.txt", "w") as out_f:
-                    out_f.write(f"{today}\n{text}\n")
-                print(f"  Success: Extracted '{text}' and saved to {filename}.txt")
+                existing_data[filename] = {"date": today, "value": text}
+                print(f"  Success: Extracted '{text}' for {filename}.")
             else:
-                print(f"  FATAL: Failed to extract data for {filename} after 3 attempts. Skipping file write to preserve old data.")
+                print(f"  FATAL: Failed to extract data for {filename} after 3 attempts. Skipping file update to preserve old data.")
 
             print("  Sleeping for 10 seconds before next request to avoid bot detection...")
             time.sleep(10)
 
         context.close()
+
+    # Write aggregated data out as CSV
+    try:
+        with open(data_out_file, 'w', newline='') as out_f:
+            writer = csv.writer(out_f)
+            for fund, info in existing_data.items():
+                writer.writerow([fund, info["date"], info["value"]])
+        print(f"Finished. Aggregated data saved to {data_out_file}.")
+    except Exception as e:
+        print(f"Error saving {data_out_file}: {e}")
 
 if __name__ == "__main__":
     main()

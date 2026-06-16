@@ -9,10 +9,9 @@ class SecureHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         return translated
 
     def _is_allowed(self):
-        translated = self.translate_path(self.path)
-        # We only want to serve .txt files
-        if not translated.endswith('.txt'):
-            self.send_error(403, "Forbidden: Only .txt files are allowed.")
+        # We only want to serve exactly data.out
+        if self.path != '/data.out':
+            self.send_error(403, "Forbidden")
             return False
         return True
 
@@ -34,7 +33,7 @@ def main():
 
     with ReusableTCPServer(("", port), handler) as httpd:
         print(f"Serving at port {port}")
-        print("Note: Only .txt files will be served.")
+        print("Note: Only /data.out will be served.")
         httpd.serve_forever()
 
 if __name__ == "__main__":

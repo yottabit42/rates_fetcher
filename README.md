@@ -8,9 +8,9 @@ The system consists of two main components:
 1. **Scraper:** A highly resilient Python script (`scrape.py`) driven by `rebrowser-playwright` that parses a TSV file (`targets.tsv`). It uses persistent, localized browser profiles to defeat aggressive CDNs and dynamically evaluates XPaths within the browser DOM to extract financial rates. To ensure fault tolerance, the scraper:
    - Evaluates up to 3 fallback mechanisms per target (Playwright -> `curl_cffi` TLS Spoofing -> Fidelity Legacy JSONP APIs).
    - Operates on a 3-attempt retry loop per target.
-   - Preserves previously saved data by strictly skipping output overwrites if a target explicitly fails.
+   - Preserves previously saved data by aggregating updates into a single `data.out` CSV file and skipping row updates if a target explicitly fails.
    - Throttles requests by pausing for 10 seconds between targets to avoid bot-detection triggers.
-2. **Server:** A custom Python web server (`server.py`) that securely serves only the generated `.txt` files on port 57275. It actively blocks path traversal attacks and prevents access to source code or configuration files.
+2. **Server:** A custom Python web server (`server.py`) that securely serves only the generated `data.out` CSV file on port 57275. It actively blocks path traversal attacks and strictly rejects any other requests with a 403 Forbidden.
 
 ## Project Structure
 
@@ -31,17 +31,17 @@ This project can be run either locally on your host machine or via Docker Compos
 
 1. **Run the Scraper:**
    ```bash
-   # This will automatically install playwright, chromium dependencies, and run the scrape
+   # This will automatically install dependencies and run the scrape
    ./run_scraper.sh
    ```
-   Outputs will be saved as `<Filename>.txt` in the current directory, with the date on the first line and the scraped value on the second line.
+   Outputs will be aggregated and saved into a single `data.out` CSV file.
 
 2. **Run the Server:**
    ```bash
    # This starts the secure server on port 57275
    ./run_server.sh
    ```
-   You can then access the outputs via `http://localhost:57275/VMFXX.txt`.
+   You can then access the aggregated output via `http://localhost:57275/data.out`.
 
 ### Running via Docker Compose
 
