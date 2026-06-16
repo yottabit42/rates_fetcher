@@ -1,36 +1,35 @@
-version: '3.8'
-
 services:
   scraper:
     build:
       context: .
       dockerfile: Dockerfile
-    # Using a volume mount for scripts, input, and output files as requested
+    # Scripts, input, and output files
     volumes:
-      - /mnt/vol1/docker/data/rates_fetcher:/app
-    # Run the cron daemon continuously
+      - ${DATA_PATH}:/app
     restart: unless-stopped
 
   server:
     image: python:3.12-slim
     working_dir: /app
     volumes:
-      - /mnt/vol1/docker/data/rates_fetcher:/app
-    networks:
-      - proxy
-    ports:
-      - "57275:57275"
+      - ${DATA_PATH}:/app
+    # Ports do not need exposed when using Traefik.
+    # ports:
+    #   - ${EXT_PORT}:${INT_PORT}
+    command:
+      - bash
+      - ./run_server.sh
+      - ${INT_PORT}
+    restart: unless-stopped
     labels:
       - traefik.enable=true
-      - traefik.http.routers.rates_fetcher.rule=Host(`rf.mcawesome.org`)
-      - traefik.http.routers.rates_fetcher.entrypoints=http
-      - traefik.http.routers.rates_fetcher.tls=false
-      - traefik.http.services.rates_fetcher.loadbalancer.server.port=57275
-      - traefik.docker.network=proxy
-    # Execute the server script on port 57275
-    command: ["bash", "./run_server.sh", "57275"]
-    restart: unless-stopped
-
+      - traefik.http.routers.rates_fetcher.rule=Host(`${TRAEFIK_HOST}`)
+      - traefik.http.routers.rates_fetcher.entrypoints=https
+      - traefik.http.routers.rates_fetcher.tls=true
+      - traefik.http.services.rates_fetcher.loadbalancer.server.port=${INT_PORT}
+      - traefik.docker.network=proxy # Required for multiple networks in the stack.
+    networks:
+      - proxy
 networks:
   proxy:
     external: true
