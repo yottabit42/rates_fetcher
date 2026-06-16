@@ -82,7 +82,7 @@ def main():
 
                     js_code = f"""
                     () => {{
-                        let result = document.evaluate(`{xpath}`, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                        const result = document.evaluate(`{xpath}`, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
                         return result.singleNodeValue ? result.singleNodeValue.nodeValue || result.singleNodeValue.textContent : null;
                     }}
                     """
