@@ -9,9 +9,10 @@ class SecureHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         return translated
 
     def _is_allowed(self):
-        # We only want to serve exactly data.out
-        if self.path != '/data.out':
-            self.send_error(403, "Forbidden")
+        translated = self.translate_path(self.path)
+        # We only want to serve data.out
+        if not translated.endswith('data.out'):
+            self.send_error(403, "Forbidden: Only data.out is allowed.")
             return False
         return True
 
@@ -33,7 +34,7 @@ def main():
 
     with ReusableTCPServer(("", port), handler) as httpd:
         print(f"Serving at port {port}")
-        print("Note: Only /data.out will be served.")
+        print("Note: Only data.out will be served.")
         httpd.serve_forever()
 
 if __name__ == "__main__":

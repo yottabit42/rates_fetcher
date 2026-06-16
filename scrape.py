@@ -2,6 +2,9 @@ import sys
 import re
 import time
 import json
+import csv
+import os
+import random
 import requests as std_requests
 from datetime import date
 from rebrowser_playwright.sync_api import sync_playwright
@@ -12,9 +15,6 @@ def main():
     if len(sys.argv) != 2:
         print("Usage: python3 scrape.py <targets.tsv>")
         sys.exit(1)
-
-    import os
-    import csv
 
     targets_file = sys.argv[1]
 
@@ -74,12 +74,9 @@ def main():
             for attempt in range(3):
                 if attempt > 0:
                     print(f"  Retry attempt {attempt + 1}/3 for {filename}...")
-                    time.sleep(5) # short pause before retry
 
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=10000)
-
-                    # Removing trailing text() or text()[n] so wait_for_selector works
                     wait_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
                     page.wait_for_selector(f"xpath={wait_xpath}", timeout=10000)
 
@@ -90,47 +87,60 @@ def main():
                     }}
                     """
                     text = page.evaluate(js_code)
-
                 except Exception as e:
-                    print(f"  Playwright failed for {filename} ({e}). Falling back to curl_cffi...")
-                    try:
-                        headers = {
-                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-                            "Accept-Language": "en-US,en;q=0.9",
-                            "Cache-Control": "max-age=0",
-                        }
-                        response = requests.get(url, headers=headers, impersonate="chrome", timeout=10)
+                    print(f"  Playwright failed for {filename} ({e}).")
 
-                        if response.status_code == 200:
-                            tree = html.fromstring(response.text)
+                # Random sleep after Playwright method (whether success or fail)
+                delay = random.randint(2, 7)
+                print(f"  Sleeping {delay}s after Playwright retrieval attempt...")
+                time.sleep(delay)
 
-                            # Evaluate the exact xpath against the raw HTML
-                            nodes = tree.xpath(xpath)
-                            if nodes:
-                                # lxml xpath can return a string directly if the xpath ends in text(),
-                                # or it can return an Element.
-                                if isinstance(nodes[0], str):
-                                    text = nodes[0]
-                                else:
-                                    text = nodes[0].text_content()
+                if text is not None:
+                    break
+
+                # Method 2: curl_cffi fallback
+                print(f"  Falling back to curl_cffi for {filename}...")
+                try:
+                    headers = {
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                        "Accept-Language": "en-US,en;q=0.9",
+                        "Cache-Control": "max-age=0",
+                    }
+                    response = requests.get(url, headers=headers, impersonate="chrome", timeout=10)
+
+                    if response.status_code == 200:
+                        tree = html.fromstring(response.text)
+                        nodes = tree.xpath(xpath)
+                        if nodes:
+                            if isinstance(nodes[0], str):
+                                text = nodes[0]
                             else:
-                                print(f"  XPath '{xpath}' not found in raw HTML payload for {filename}.")
+                                text = nodes[0].text_content()
                         else:
-                            print(f"  curl_cffi failed with status code: {response.status_code}")
-                    except Exception as ex:
-                        print(f"  curl_cffi fallback also failed: {ex}")
+                            print(f"  XPath '{xpath}' not found in raw HTML payload for {filename}.")
+                    else:
+                        print(f"  curl_cffi failed with status code: {response.status_code}")
+                except Exception as ex:
+                    print(f"  curl_cffi fallback also failed: {ex}")
 
-                # Third fallback specific to Fidelity targets
-                if text is None and 'fidelity.com' in url.lower():
+                # Random sleep after curl_cffi method (whether success or fail)
+                delay = random.randint(2, 7)
+                print(f"  Sleeping {delay}s after curl_cffi retrieval attempt...")
+                time.sleep(delay)
+
+                if text is not None:
+                    break
+
+                # Method 3: Fidelity API fallback
+                if 'fidelity.com' in url.lower():
                     print(f"  Attempting Fidelity Legacy JSON API fallback for {filename}...")
                     try:
                         fq_url = f"https://fastquote.fidelity.com/service/quote/json?productid=embeddedquotes&symbols={filename}"
                         fq_headers = {
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
                         }
                         fq_response = std_requests.get(fq_url, headers=fq_headers, timeout=10)
                         if fq_response.status_code == 200:
-                            # Strip the leading '(' and trailing ')' from JSONP response
                             clean_json = fq_response.text.strip()[1:-1]
                             data = json.loads(clean_json)
                             if "QUOTES" in data and filename in data["QUOTES"]:
@@ -144,7 +154,11 @@ def main():
                     except Exception as ex:
                         print(f"  Fidelity Legacy JSON API fallback failed: {ex}")
 
-                # If text was successfully extracted, break out of the retry loop
+                    # Random sleep after Fidelity API method (whether success or fail)
+                    delay = random.randint(2, 7)
+                    print(f"  Sleeping {delay}s after Fidelity API retrieval attempt...")
+                    time.sleep(delay)
+
                 if text is not None:
                     break
 
@@ -154,9 +168,6 @@ def main():
                 print(f"  Success: Extracted '{text}' for {filename}.")
             else:
                 print(f"  FATAL: Failed to extract data for {filename} after 3 attempts. Skipping file update to preserve old data.")
-
-            print("  Sleeping for 10 seconds before next request to avoid bot detection...")
-            time.sleep(10)
 
         context.close()
 
