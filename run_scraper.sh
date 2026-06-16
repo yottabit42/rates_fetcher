@@ -1,7 +1,10 @@
 #!/bin/bash
 
-# Ensure dependencies are installed (already in Docker, but keeping for standalone usage)
-pip install curl_cffi lxml beautifulsoup4 requests
+# Ensure playwright is installed (already in Docker, but keeping for standalone usage)
+pip install playwright
+
+# Ensure chromium is installed for playwright (using --with-deps for linux environments if not in Docker)
+playwright install --with-deps chromium
 
 # Run the python script
 python3 scrape.py targets.tsv
