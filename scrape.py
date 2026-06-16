@@ -64,16 +64,16 @@ def main():
                     print(f"Skipping malformed line: {line}")
                     continue
 
-            filename = parts[0]
+            key_name = parts[0]
             url = parts[1]
             xpath = parts[2]
 
-            print(f"Processing {filename} from {url}...")
+            print(f"Processing {key_name} from {url}...")
 
             text = None
             for attempt in range(3):
                 if attempt > 0:
-                    print(f"  Retry attempt {attempt + 1}/3 for {filename}...")
+                    print(f"  Retry attempt {attempt + 1}/3 for {key_name}...")
 
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=10000)
@@ -88,7 +88,7 @@ def main():
                     """
                     text = page.evaluate(js_code)
                 except Exception as e:
-                    print(f"  Playwright failed for {filename} ({e}).")
+                    print(f"  Playwright failed for {key_name} ({e}).")
 
                 # Random sleep after Playwright method (whether success or fail)
                 delay = random.randint(2, 7)
@@ -99,7 +99,7 @@ def main():
                     break
 
                 # Method 2: curl_cffi fallback
-                print(f"  Falling back to curl_cffi for {filename}...")
+                print(f"  Falling back to curl_cffi for {key_name}...")
                 try:
                     headers = {
                         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -117,7 +117,7 @@ def main():
                             else:
                                 text = nodes[0].text_content()
                         else:
-                            print(f"  XPath '{xpath}' not found in raw HTML payload for {filename}.")
+                            print(f"  XPath '{xpath}' not found in raw HTML payload for {key_name}.")
                     else:
                         print(f"  curl_cffi failed with status code: {response.status_code}")
                 except Exception as ex:
@@ -133,9 +133,9 @@ def main():
 
                 # Method 3: Fidelity API fallback
                 if 'fidelity.com' in url.lower():
-                    print(f"  Attempting Fidelity Legacy JSON API fallback for {filename}...")
+                    print(f"  Attempting Fidelity Legacy JSON API fallback for {key_name}...")
                     try:
-                        fq_url = f"https://fastquote.fidelity.com/service/quote/json?productid=embeddedquotes&symbols={filename}"
+                        fq_url = f"https://fastquote.fidelity.com/service/quote/json?productid=embeddedquotes&symbols={key_name}"
                         fq_headers = {
                             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
                         }
@@ -143,12 +143,12 @@ def main():
                         if fq_response.status_code == 200:
                             clean_json = fq_response.text.strip()[1:-1]
                             data = json.loads(clean_json)
-                            if "QUOTES" in data and filename in data["QUOTES"]:
-                                text = data["QUOTES"][filename].get("YIELD_7_DAY")
+                            if "QUOTES" in data and key_name in data["QUOTES"]:
+                                text = data["QUOTES"][key_name].get("YIELD_7_DAY")
                                 if not text:
-                                    print(f"  JSON API response did not contain YIELD_7_DAY for {filename}.")
+                                    print(f"  JSON API response did not contain YIELD_7_DAY for {key_name}.")
                             else:
-                                print(f"  JSON API response missing expected QUOTES payload for {filename}.")
+                                print(f"  JSON API response missing expected QUOTES payload for {key_name}.")
                         else:
                             print(f"  Fidelity Legacy JSON API failed with status code: {fq_response.status_code}")
                     except Exception as ex:
@@ -164,10 +164,10 @@ def main():
 
             if text is not None:
                 text = text.strip().rstrip('%').strip()
-                existing_data[filename] = {"date": today, "value": text}
-                print(f"  Success: Extracted '{text}' for {filename}.")
+                existing_data[key_name] = {"date": today, "value": text}
+                print(f"  Success: Extracted '{text}' for {key_name}.")
             else:
-                print(f"  FATAL: Failed to extract data for {filename} after 3 attempts. Skipping file update to preserve old data.")
+                print(f"  FATAL: Failed to extract data for {key_name} after 3 attempts. Skipping file update to preserve old data.")
 
         context.close()
 
