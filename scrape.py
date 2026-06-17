@@ -78,15 +78,14 @@ def main():
                 try:
                     page.goto(url, wait_until="domcontentloaded", timeout=10000)
                     wait_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
-                    page.wait_for_selector(f"xpath={wait_xpath}", timeout=10000)
-
-                    js_code = f"""
-                    () => {{
-                        const result = document.evaluate(`{xpath}`, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-                        return result.singleNodeValue ? result.singleNodeValue.nodeValue || result.singleNodeValue.textContent : null;
-                    }}
-                    """
-                    text = page.evaluate(js_code)
+                    
+                    # Fix #3 implemented: Wait for the element and grab its handle directly
+                    element_handle = page.wait_for_selector(f"xpath={wait_xpath}", state="attached", timeout=10000)
+                    
+                    # Evaluate text extraction strictly within the context of the returned element handle
+                    if element_handle:
+                        text = element_handle.evaluate("(node) => node.nodeValue || node.textContent")
+                        
                 except Exception as e:
                     print(f"  Playwright failed for {key_name} ({e}).")
 
@@ -165,6 +164,7 @@ def main():
             if text is not None:
                 text = text.strip().rstrip('%').strip()
                 
+                # Floating-point validation block
                 is_positive_float = False
                 try:
                     parsed_value = float(text)
