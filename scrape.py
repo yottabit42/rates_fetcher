@@ -165,7 +165,6 @@ def main():
             if text is not None:
                 text = text.strip().rstrip('%').strip()
                 
-                # --- NEW VALIDATION BLOCK ---
                 is_positive_float = False
                 try:
                     parsed_value = float(text)
@@ -179,7 +178,6 @@ def main():
                     print(f"  Success: Extracted '{text}' for {key_name}.")
                 else:
                     print(f"  FATAL: Extracted value '{text}' for {key_name} is not a positive floating-point number. Skipping update to preserve old data.")
-                # ----------------------------
 
             else:
                 print(f"  FATAL: Failed to extract data for {key_name} after 3 attempts. Skipping file update to preserve old data.")
