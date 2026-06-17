@@ -164,8 +164,23 @@ def main():
 
             if text is not None:
                 text = text.strip().rstrip('%').strip()
-                existing_data[key_name] = {"date": today, "value": text}
-                print(f"  Success: Extracted '{text}' for {key_name}.")
+                
+                # --- NEW VALIDATION BLOCK ---
+                is_positive_float = False
+                try:
+                    parsed_value = float(text)
+                    if parsed_value > 0:
+                        is_positive_float = True
+                except ValueError:
+                    pass
+                
+                if is_positive_float:
+                    existing_data[key_name] = {"date": today, "value": text}
+                    print(f"  Success: Extracted '{text}' for {key_name}.")
+                else:
+                    print(f"  FATAL: Extracted value '{text}' for {key_name} is not a positive floating-point number. Skipping update to preserve old data.")
+                # ----------------------------
+
             else:
                 print(f"  FATAL: Failed to extract data for {key_name} after 3 attempts. Skipping file update to preserve old data.")
 
