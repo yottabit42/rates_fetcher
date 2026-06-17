@@ -16,7 +16,7 @@ CMF	https://www.ishares.com/us/products/239731/	//*[@id="EmbeddedWalrusHtml"]/di
 NYF	https://www.ishares.com/us/products/239767/	//*[@id="EmbeddedWalrusHtml"]/div/div/div/div/div/div/main/div/div/div/div[1]/walrus-render-on-client/div/div[4]/div/div/dl[1]/div[4]/dd/span/text()
 MUB	https://www.ishares.com/us/products/239766/	//*[@id="EmbeddedWalrusHtml"]/div/div/div/div/div/div/main/div/div/div/div[1]/walrus-render-on-client/div/div[4]/div/div/dl[1]/div[4]/dd/span/text()
 SGOV	https://www.ishares.com/us/products/314116/	//*[@id="EmbeddedWalrusHtml"]/div/div/div/div/div/div/main/div/div/div/div[1]/walrus-render-on-client/div/div[4]/div/div/dl[1]/div[4]/dd/span/text()
-USFR	https://www.wisdomtree.com/us/products/fixed-income/usfr	/html/body/main/div[2]/div[1]/div[1]/div[3]/div[2]/h3
+USFR	https://www.wisdomtree.com/us/products/fixed-income/usfr	//*[@id="react-aria-_R_biitinpfiv5v4npfivb_-11-1"]
 SWVXX	https://www.schwabassetmanagement.com/products/swvxx	//*[@id="sfm-table--yields"]/table/tbody/tr[1]/td[2]
 SNVXX	https://www.schwabassetmanagement.com/products/snvxx	//*[@id="sfm-table--yields"]/table/tbody/tr[1]/td[2]
 SNOXX	https://www.schwabassetmanagement.com/products/snoxx	//*[@id="sfm-table--yields"]/table/tbody/tr[1]/td[2]
