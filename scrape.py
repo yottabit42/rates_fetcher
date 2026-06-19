@@ -106,15 +106,15 @@ def main():
                 else:
                     # STANDARD PATH: Playwright -> curl_cffi fallback
                     try:
-                        page.goto(url, wait_until="domcontentloaded", timeout=10000)
+                        # Wait until 'load' instead of 'domcontentloaded' to let redirects/hydration finish
+                        page.goto(url, wait_until="load", timeout=15000)
                         wait_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
                         
-                        # Wait for the element and grab its handle directly
-                        element_handle = page.wait_for_selector(f"xpath={wait_xpath}", state="attached", timeout=10000)
+                        # Use the auto-retrying Locator API instead of a static ElementHandle
+                        locator = page.locator(f"xpath={wait_xpath}").first
                         
-                        # Evaluate text extraction strictly within the context of the returned element handle
-                        if element_handle:
-                            text = element_handle.evaluate("(node) => node.nodeValue || node.textContent")
+                        # Extract text directly (Playwright auto-waits up to the timeout for the element)
+                        text = locator.text_content(timeout=10000)
                             
                     except Exception as e:
                         print(f"  Playwright failed for {key_name} ({e}).")
