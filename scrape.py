@@ -75,64 +75,10 @@ def main():
                 if attempt > 0:
                     print(f"  Retry attempt {attempt + 1}/3 for {key_name}...")
 
-                try:
-                    page.goto(url, wait_until="domcontentloaded", timeout=10000)
-                    wait_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
-                    
-                    # Fix #3 implemented: Wait for the element and grab its handle directly
-                    element_handle = page.wait_for_selector(f"xpath={wait_xpath}", state="attached", timeout=10000)
-                    
-                    # Evaluate text extraction strictly within the context of the returned element handle
-                    if element_handle:
-                        text = element_handle.evaluate("(node) => node.nodeValue || node.textContent")
-                        
-                except Exception as e:
-                    print(f"  Playwright failed for {key_name} ({e}).")
-
-                # Random sleep after Playwright method (whether success or fail)
-                delay = random.randint(2, 7)
-                print(f"  Sleeping {delay}s after Playwright retrieval attempt...")
-                time.sleep(delay)
-
-                if text is not None:
-                    break
-
-                # Method 2: curl_cffi fallback
-                print(f"  Falling back to curl_cffi for {key_name}...")
-                try:
-                    headers = {
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-                        "Accept-Language": "en-US,en;q=0.9",
-                        "Cache-Control": "max-age=0",
-                    }
-                    response = requests.get(url, headers=headers, impersonate="chrome", timeout=10)
-
-                    if response.status_code == 200:
-                        tree = html.fromstring(response.text)
-                        nodes = tree.xpath(xpath)
-                        if nodes:
-                            if isinstance(nodes[0], str):
-                                text = nodes[0]
-                            else:
-                                text = nodes[0].text_content()
-                        else:
-                            print(f"  XPath '{xpath}' not found in raw HTML payload for {key_name}.")
-                    else:
-                        print(f"  curl_cffi failed with status code: {response.status_code}")
-                except Exception as ex:
-                    print(f"  curl_cffi fallback also failed: {ex}")
-
-                # Random sleep after curl_cffi method (whether success or fail)
-                delay = random.randint(2, 7)
-                print(f"  Sleeping {delay}s after curl_cffi retrieval attempt...")
-                time.sleep(delay)
-
-                if text is not None:
-                    break
-
-                # Method 3: Fidelity API fallback
+                # Branch logic based on target URL
                 if 'fidelity.com' in url.lower():
-                    print(f"  Attempting Fidelity Legacy JSON API fallback for {key_name}...")
+                    # FAST PATH: Fidelity API Only
+                    print(f"  Attempting Fidelity Legacy JSON API for {key_name}...")
                     try:
                         fq_url = f"https://fastquote.fidelity.com/service/quote/json?productid=embeddedquotes&symbols={key_name}"
                         fq_headers = {
@@ -151,13 +97,64 @@ def main():
                         else:
                             print(f"  Fidelity Legacy JSON API failed with status code: {fq_response.status_code}")
                     except Exception as ex:
-                        print(f"  Fidelity Legacy JSON API fallback failed: {ex}")
+                        print(f"  Fidelity Legacy JSON API failed: {ex}")
 
-                    # Random sleep after Fidelity API method (whether success or fail)
                     delay = random.randint(2, 7)
                     print(f"  Sleeping {delay}s after Fidelity API retrieval attempt...")
                     time.sleep(delay)
 
+                else:
+                    # STANDARD PATH: Playwright -> curl_cffi fallback
+                    try:
+                        page.goto(url, wait_until="domcontentloaded", timeout=10000)
+                        wait_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
+                        
+                        # Wait for the element and grab its handle directly
+                        element_handle = page.wait_for_selector(f"xpath={wait_xpath}", state="attached", timeout=10000)
+                        
+                        # Evaluate text extraction strictly within the context of the returned element handle
+                        if element_handle:
+                            text = element_handle.evaluate("(node) => node.nodeValue || node.textContent")
+                            
+                    except Exception as e:
+                        print(f"  Playwright failed for {key_name} ({e}).")
+
+                    delay = random.randint(2, 7)
+                    print(f"  Sleeping {delay}s after Playwright retrieval attempt...")
+                    time.sleep(delay)
+
+                    if text is not None:
+                        break
+
+                    print(f"  Falling back to curl_cffi for {key_name}...")
+                    try:
+                        headers = {
+                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                            "Accept-Language": "en-US,en;q=0.9",
+                            "Cache-Control": "max-age=0",
+                        }
+                        response = requests.get(url, headers=headers, impersonate="chrome", timeout=10)
+
+                        if response.status_code == 200:
+                            tree = html.fromstring(response.text)
+                            nodes = tree.xpath(xpath)
+                            if nodes:
+                                if isinstance(nodes[0], str):
+                                    text = nodes[0]
+                                else:
+                                    text = nodes[0].text_content()
+                            else:
+                                print(f"  XPath '{xpath}' not found in raw HTML payload for {key_name}.")
+                        else:
+                            print(f"  curl_cffi failed with status code: {response.status_code}")
+                    except Exception as ex:
+                        print(f"  curl_cffi fallback also failed: {ex}")
+
+                    delay = random.randint(2, 7)
+                    print(f"  Sleeping {delay}s after curl_cffi retrieval attempt...")
+                    time.sleep(delay)
+
+                # Break the retry loop if text was successfully acquired by any method
                 if text is not None:
                     break
 
@@ -196,3 +193,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
