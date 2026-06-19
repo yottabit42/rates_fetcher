@@ -78,6 +78,10 @@ def main():
                 # Branch logic based on target URL
                 if 'fidelity.com' in url.lower():
                     # FAST PATH: Fidelity API Only
+                    delay = random.randint(2, 7)
+                    print(f"  Sleeping {delay}s before Fidelity API retrieval attempt...")
+                    time.sleep(delay)
+
                     print(f"  Attempting Fidelity Legacy JSON API for {key_name}...")
                     try:
                         fq_url = f"https://fastquote.fidelity.com/service/quote/json?productid=embeddedquotes&symbols={key_name}"
@@ -99,12 +103,12 @@ def main():
                     except Exception as ex:
                         print(f"  Fidelity Legacy JSON API failed: {ex}")
 
-                    delay = random.randint(2, 7)
-                    print(f"  Sleeping {delay}s after Fidelity API retrieval attempt...")
-                    time.sleep(delay)
-
                 else:
                     # STANDARD PATH: Playwright -> curl_cffi fallback
+                    delay = random.randint(2, 7)
+                    print(f"  Sleeping {delay}s before Playwright retrieval attempt...")
+                    time.sleep(delay)
+
                     try:
                         # Wait until 'load' instead of 'domcontentloaded' to let redirects/hydration finish
                         page.goto(url, wait_until="load", timeout=15000)
@@ -119,14 +123,15 @@ def main():
                     except Exception as e:
                         print(f"  Playwright failed for {key_name} ({e}).")
 
-                    delay = random.randint(2, 7)
-                    print(f"  Sleeping {delay}s after Playwright retrieval attempt...")
-                    time.sleep(delay)
-
                     if text is not None:
                         break
 
                     print(f"  Falling back to curl_cffi for {key_name}...")
+                    
+                    delay = random.randint(2, 7)
+                    print(f"  Sleeping {delay}s before curl_cffi retrieval attempt...")
+                    time.sleep(delay)
+                    
                     try:
                         headers = {
                             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
@@ -149,10 +154,6 @@ def main():
                             print(f"  curl_cffi failed with status code: {response.status_code}")
                     except Exception as ex:
                         print(f"  curl_cffi fallback also failed: {ex}")
-
-                    delay = random.randint(2, 7)
-                    print(f"  Sleeping {delay}s after curl_cffi retrieval attempt...")
-                    time.sleep(delay)
 
                 # Break the retry loop if text was successfully acquired by any method
                 if text is not None:
@@ -192,5 +193,4 @@ def main():
         print(f"Error saving {data_out_file}: {e}")
 
 if __name__ == "__main__":
-    main()
-    
+    main
