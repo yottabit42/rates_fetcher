@@ -12,11 +12,14 @@ from curl_cffi import requests
 from lxml import html
 
 def main():
-    if len(sys.argv) != 2:
-        print("Usage: python3 scrape.py <targets.tsv>")
+    # Allow 2 or more arguments: script.py, targets.tsv, and optional keys
+    if len(sys.argv) < 2:
+        print("Usage: python3 scrape.py <targets.tsv> [key1] [key2] ...")
         sys.exit(1)
 
     targets_file = sys.argv[1]
+    # Store target keys in a set for fast lookup
+    target_keys = set(sys.argv[2:])
 
     try:
         with open(targets_file, 'r') as f:
@@ -28,7 +31,7 @@ def main():
     today = date.today().strftime("%Y-%m-%d")
     data_out_file = "data.out"
 
-    # Load existing data to preserve failed iterations
+    # Load existing data to preserve failed iterations and untouched keys
     existing_data = {}
     if os.path.exists(data_out_file):
         try:
@@ -65,6 +68,11 @@ def main():
                     continue
 
             key_name = parts[0]
+            
+            # Skip this key if specific target keys were provided and this isn't one of them
+            if target_keys and key_name not in target_keys:
+                continue
+
             url = parts[1]
             xpath = parts[2]
 
@@ -193,4 +201,4 @@ def main():
         print(f"Error saving {data_out_file}: {e}")
 
 if __name__ == "__main__":
-    main
+    main()
