@@ -168,7 +168,8 @@ def main():
                     break
 
             if text is not None:
-                text = text.strip().rstrip('%').strip()
+                # Strip spaces, remove leading '$', remove trailing '%', and strip any resulting spaces
+                text = text.strip().lstrip('$').rstrip('%').strip()
                 
                 # Floating-point validation block
                 is_positive_float = False
