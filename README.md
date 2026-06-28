@@ -5,12 +5,12 @@ A robust web scraping automation project designed to extract data points (such a
 ## Overview
 
 The system consists of two main components:
-1. **Scraper:** A Python script (`scrape.py`) driven by Playwright that parses a TSV file (`targets.tsv`), navigates to specific URLs, evaluates XPaths within the browser context, and writes the output to a CSV file.
+1. **Scraper:** A Python script (`scrape.py`) driven by Playwright that parses a TSV file (`targets.tsv`), navigates to specific URLs, evaluates XPaths within the browser context, and writes the output to a CSV file. The script automatically cleans the extracted data (trimming leading `$` and trailing `%` characters) and validates the result as a positive floating-point number before preserving it.
 2. **Server:** A custom Python web server (`server.py`) that securely serves only the generated output CSV file, by default on port 57275. It actively blocks path traversal attacks and prevents access to source code or configuration files.
 
 ## Project Structure
 
-- `scrape.py`: Core python script to scrape targets.
+- `scrape.py`: Core python script to scrape targets. Accepts specific target keys as command-line arguments to limit the scope of the scrape.
 - `run_scraper.sh`: Bash entry point to install dependencies and execute the scraper.
 - `server.py`: Secure Python web server to host outputs.
 - `run_server.sh`: Bash entry point to start the web server.
@@ -30,7 +30,20 @@ This project can be run either locally on your host machine or via Docker Compos
    # This will automatically install playwright, chromium dependencies, and run the scrape
    ./run_scraper.sh
    ```
+   
    Outputs will be saved as a CSV file named `data.out` in the current directory, with the following field order: fund key, date of successful retrieval, rate.
+
+   #### Advanced Usage (Specific Targets)
+
+   If you only want to update specific keys without re-scraping the entire file, you can run the Python script directly. The script requires your targets file as the first argument, followed by any specific keys you want to isolate:
+
+   ```bash
+   # Run for all targets in the file
+   python3 scrape.py targets.tsv
+   
+   # Run only for specific target keys (e.g., 7555, M219, 8561)
+   python3 scrape.py targets.tsv 7555 M219 8561
+   ```
 
 2. **Run the Server:**
    ```bash
