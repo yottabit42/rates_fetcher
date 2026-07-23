@@ -1,46 +1,98 @@
 import sys
 import re
-import time
 import json
 import csv
 import os
-import random
+import time
 import requests as std_requests
 from urllib.parse import urlparse
-from datetime import date
+from datetime import datetime, date
 from rebrowser_playwright.sync_api import sync_playwright
 from curl_cffi import requests as cffi_requests
 from lxml import html
 
+try:
+    import zoneinfo
+except ImportError:
+    zoneinfo = None
+
 # Define your API keys here, or pass them via environment variables
 SCRAPER_API_KEY = os.environ.get("SCRAPER_API_KEY", "YOUR_FREE_API_KEY")
 SCRAPINGBEE_API_KEY = os.environ.get("SCRAPINGBEE_API_KEY", "YOUR_SCRAPINGBEE_API_KEY")
+ZENROWS_API_KEY = os.environ.get("ZENROWS_API_KEY", "YOUR_ZENROWS_API_KEY")
+SCRAPINGANT_API_KEY = os.environ.get("SCRAPINGANT_API_KEY", "YOUR_SCRAPINGANT_API_KEY")
+SCRAPINGDOG_API_KEY = os.environ.get("SCRAPINGDOG_API_KEY", "YOUR_SCRAPINGDOG_API_KEY")
+SCRAPEDO_API_KEY = os.environ.get("SCRAPEDO_API_KEY", "YOUR_SCRAPEDO_API_KEY")
 
 def main():
-    # Allow 2 or more arguments: script.py, targets.tsv, and optional keys
     if len(sys.argv) < 2:
         print("Usage: python3 scrape.py <targets.tsv> [key1] [key2] ...")
         sys.exit(1)
 
     targets_file = sys.argv[1]
-    # Store target keys in a set for fast lookup
     target_keys = set(sys.argv[2:])
 
     try:
-        with open(targets_file, 'r') as f:
+        # Read with utf-8-sig to automatically strip Byte Order Marks (BOM) if present
+        with open(targets_file, 'r', encoding='utf-8-sig') as f:
             lines = f.readlines()
     except FileNotFoundError:
         print(f"Error: Could not find '{targets_file}'.")
         sys.exit(1)
 
-    today = date.today().strftime("%Y-%m-%d")
-    data_out_file = "data.out"
+    # Determine today's date based on custom timezone environment variable
+    # Using SCRAPER_TZ prevents conflicts with underlying Docker OS defaults
+    tz_env = os.environ.get("SCRAPER_TZ") or os.environ.get("TZ")
+    print(f"DEBUG: Environment Timezone variable evaluated to: '{tz_env}'")
+    
+    if tz_env and zoneinfo:
+        try:
+            tz = zoneinfo.ZoneInfo(tz_env)
+            now = datetime.now(tz)
+            today = now.strftime("%Y-%m-%d")
+            print(f"DEBUG: Using zoneinfo. Current time in {tz_env} is: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+            print(f"DEBUG: Evaluated 'today' date string: {today}")
+        except Exception as e:
+            print(f"Warning: Could not load timezone '{tz_env}' using zoneinfo: {e}. Falling back to tzset.")
+            # Only set os.environ['TZ'] temporarily so time.tzset() picks it up if we use SCRAPER_TZ
+            original_tz = os.environ.get('TZ')
+            os.environ['TZ'] = tz_env
+            if hasattr(time, 'tzset'):
+                time.tzset()
+            now = datetime.now()
+            today = date.today().strftime("%Y-%m-%d")
+            print(f"DEBUG: Fallback time after tzset is: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+            print(f"DEBUG: Evaluated 'today' date string: {today}")
+            # Restore original TZ just in case
+            if original_tz is not None:
+                os.environ['TZ'] = original_tz
+            else:
+                del os.environ['TZ']
+    else:
+        # Fallback for systems without zoneinfo (Python < 3.9) or missing tzdata
+        if tz_env:
+            original_tz = os.environ.get('TZ')
+            os.environ['TZ'] = tz_env
+            if hasattr(time, 'tzset'):
+                time.tzset()
+            
+        now = datetime.now()
+        today = date.today().strftime("%Y-%m-%d")
+        print(f"DEBUG: No zoneinfo used. Current time is: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        print(f"DEBUG: Evaluated 'today' date string: {today}")
+        
+        if tz_env and hasattr(time, 'tzset'):
+            if original_tz is not None:
+                os.environ['TZ'] = original_tz
+            else:
+                del os.environ['TZ']
 
-    # Load existing data to preserve failed iterations and untouched keys
+    data_out_file = "data.out"
     existing_data = {}
+
     if os.path.exists(data_out_file):
         try:
-            with open(data_out_file, 'r', newline='') as f:
+            with open(data_out_file, 'r', newline='', encoding='utf-8') as f:
                 reader = csv.reader(f)
                 for row in reader:
                     if len(row) >= 3:
@@ -48,22 +100,34 @@ def main():
         except Exception as e:
             print(f"Warning: Could not parse existing data.out ({e})")
 
-    if SCRAPER_API_KEY == "YOUR_FREE_API_KEY" or SCRAPINGBEE_API_KEY == "YOUR_SCRAPINGBEE_API_KEY":
-        print("WARNING: You are using placeholder API keys. API Fallbacks will fail until these are updated.")
+    # Warn if any API key is missing
+    placeholder_keys = [
+        ("ScraperAPI", SCRAPER_API_KEY, "YOUR_FREE_API_KEY"),
+        ("ScrapingBee", SCRAPINGBEE_API_KEY, "YOUR_SCRAPINGBEE_API_KEY"),
+        ("ZenRows", ZENROWS_API_KEY, "YOUR_ZENROWS_API_KEY"),
+        ("ScrapingAnt", SCRAPINGANT_API_KEY, "YOUR_SCRAPINGANT_API_KEY"),
+        ("Scrapingdog", SCRAPINGDOG_API_KEY, "YOUR_SCRAPINGDOG_API_KEY"),
+        ("Scrape.do", SCRAPEDO_API_KEY, "YOUR_SCRAPEDO_API_KEY"),
+    ]
 
+    for name, key, placeholder in placeholder_keys:
+        if key == placeholder:
+            print(f"WARNING: You are using a placeholder API key for {name}. Its fallback will fail.")
+
+    # We keep Playwright launched in case all API layers fail
     with sync_playwright() as p:
-        # Chromium requires --no-sandbox to run as root inside a Docker container
-        # Use a persistent context to bypass strict anti-bot protections by mimicking a localized user profile
         context = p.chromium.launch_persistent_context(
             user_data_dir="/tmp/playwright_user_data",
             headless=True,
             args=["--no-sandbox", "--disable-blink-features=AutomationControlled"],
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
+
         page = context.pages[0]
 
         for line in lines:
-            line = line.strip()
+            # Aggressive cleanup for invisible characters
+            line = line.strip().replace('\ufeff', '').replace('\r', '')
             if not line:
                 continue
 
@@ -74,21 +138,28 @@ def main():
                     print(f"Skipping malformed line: {line}")
                     continue
 
-            key_name = parts[0]
+            key_name = parts[0].strip()
             
-            # Skip this key if specific target keys were provided and this isn't one of them
             if target_keys and key_name not in target_keys:
                 continue
 
-            url = parts[1]
-            xpath = parts[2]
+            # SKIP IF ALREADY UPDATED TODAY
+            if key_name in existing_data and existing_data[key_name]["date"] == today:
+                print(f"Skipping {key_name}: Already updated today ({today}).")
+                continue
 
-            print(f"Processing {key_name} from {url}...")
+            # Aggressively clean the URL
+            url = parts[1].strip(' "\'')
+            xpath = parts[2].strip()
+
+            print(f"Processing {key_name} from URL: [{url}]")
+
             text = None
 
-            # 1. FAST PATH: Fidelity JSON API
-            if 'fastquote.fidelity.com' in url.lower():
-                time.sleep(random.randint(1, 3))
+            # ==========================================
+            # PATH 1: FIDELITY API (Only for Fidelity)
+            # ==========================================
+            if 'fidelity.com' in url.lower():
                 print(f"  Attempting Fidelity Legacy JSON API for {key_name}...")
                 try:
                     fq_headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
@@ -109,73 +180,48 @@ def main():
                         else:
                             print(f"  JSON API response missing expected QUOTES payload for {key_name}.")
                     else:
-                        print(f"  Fidelity Legacy JSON API failed with status code: {fq_response.status_code}")
+                        print(f"  Fidelity Legacy JSON API failed with status code: {fq_response.status_code}. Details: {fq_response.text}")
                 except Exception as ex:
                     print(f"  Fidelity Legacy JSON API failed: {ex}")
 
-            # 2. STANDARD PATH: Playwright -> curl_cffi -> ScraperAPI -> ScrapingBee (Waterfall)
+            # ==========================================
+            # PATH 2: STANDARD WEB SCRAPING WATERFALL
+            # ==========================================
             else:
-                # --- METHOD 1: Playwright ---
-                delay = random.randint(2, 6)
-                print(f"  Sleeping {delay}s before Playwright retrieval attempt...")
-                time.sleep(delay)
+                # --- METHOD 1: curl_cffi ---
+                print(f"  Attempting curl_cffi for {key_name}...")
                 try:
-                    # Wait until 'load' instead of 'domcontentloaded' to let redirects/hydration finish
-                    page.goto(url, wait_until="load", timeout=15000)
-                    wait_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                    }
                     
-                    # Use the auto-retrying Locator API instead of a static ElementHandle
-                    locator = page.locator(f"xpath={wait_xpath}").first
-                    
-                    # Extract text directly (Playwright auto-waits up to the timeout for the element)
-                    text = locator.text_content(timeout=10000)
-                except Exception as e:
-                    print(f"  Playwright failed for {key_name} ({e}).")
-
-                # --- METHOD 2: curl_cffi ---
-                if text is None:
-                    print(f"  Falling back to curl_cffi for {key_name}...")
-                    time.sleep(random.randint(2, 5))
-                    try:
-                        playwright_cookies = context.cookies()
-                        cookie_dict = {cookie['name']: cookie['value'] for cookie in playwright_cookies}
-                        parsed_url = urlparse(url)
-                        base_url = f"{parsed_url.scheme}://{parsed_url.netloc}/"
-
-                        headers = {
-                            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-                            "Accept-Language": "en-US,en;q=0.9",
-                            "Cache-Control": "max-age=0",
-                            "Referer": base_url,
-                            "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-                            "Sec-Ch-Ua-Mobile": "?0",
-                            "Sec-Ch-Ua-Platform": '"Windows"',
-                            "Sec-Fetch-Dest": "document",
-                            "Sec-Fetch-Mode": "navigate",
-                            "Sec-Fetch-Site": "same-origin",
-                            "Sec-Fetch-User": "?1",
-                            "Upgrade-Insecure-Requests": "1",
-                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                        }
-                        
-                        response = cffi_requests.get(url, headers=headers, impersonate="chrome", timeout=10)
-
-                        if response.status_code == 200:
-                            tree = html.fromstring(response.text)
-                            clean_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
-                            nodes = tree.xpath(clean_xpath)
-                            if nodes:
-                                text = nodes[0] if isinstance(nodes[0], str) else nodes[0].text_content()
-                            else:
-                                print(f"  XPath '{clean_xpath}' not found in curl_cffi HTML payload.")
+                    response = cffi_requests.get(url, headers=headers, impersonate="chrome")
+                    if response.status_code == 200:
+                        tree = html.fromstring(response.content)
+                        clean_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
+                        nodes = tree.xpath(clean_xpath)
+                        if nodes:
+                            text = nodes[0] if isinstance(nodes[0], str) else nodes[0].text_content()
                         else:
-                            print(f"  curl_cffi failed with status code: {response.status_code}")
-                    except Exception as ex:
-                        print(f"  curl_cffi fallback failed: {ex}")
+                            print(f"  XPath '{clean_xpath}' not found in curl_cffi HTML payload.")
+                    else:
+                        print(f"  curl_cffi failed with status code: {response.status_code}. Details: {response.text[:1000]}")
+                except Exception as ex:
+                    print(f"  curl_cffi fallback failed: {ex}")
 
-                # --- METHOD 3, 4, 5: ScraperAPI Escalation ---
+                # --- METHOD 2: Playwright (First Fallback) ---
                 if text is None:
-                    # Define the tiers to iterate through if previous attempts fail
+                    print(f"  Falling back to Playwright...")
+                    try:
+                        page.goto(url, wait_until="load", timeout=15000)
+                        wait_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
+                        locator = page.locator(f"xpath={wait_xpath}").first
+                        text = locator.text_content(timeout=10000)
+                    except Exception as e:
+                        print(f"  Playwright failed for {key_name} ({e}).")
+
+                # --- METHOD 3: ScraperAPI Escalation ---
+                if text is None:
                     scraper_tiers = [
                         ("Standard", {}),
                         ("Premium", {'premium': 'true'}),
@@ -184,20 +230,13 @@ def main():
                     
                     for tier_name, tier_params in scraper_tiers:
                         print(f"  Falling back to ScraperAPI ({tier_name}) for {key_name}...")
-                        payload = {
-                            'api_key': SCRAPER_API_KEY, 
-                            'url': url,
-                            'render': 'true'
-                        }
-                        # Add the premium flags based on the current tier
+                        payload = {'api_key': SCRAPER_API_KEY, 'url': url, 'render': 'true'}
                         payload.update(tier_params)
                         
                         try:
-                            # Timeout 90s because residential proxy rendering takes time
                             api_response = std_requests.get('https://api.scraperapi.com/', params=payload, timeout=90)
-
                             if api_response.status_code == 200:
-                                tree = html.fromstring(api_response.text)
+                                tree = html.fromstring(api_response.content)
                                 clean_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
                                 nodes = tree.xpath(clean_xpath)
                                 if nodes:
@@ -205,16 +244,14 @@ def main():
                                 else:
                                     print(f"  XPath '{clean_xpath}' not found in ScraperAPI ({tier_name}) HTML payload.")
                             else:
-                                print(f"  ScraperAPI ({tier_name}) failed with status code: {api_response.status_code}.")
-                                sys.stdout.write(api_response.text + "\n")
+                                print(f"  ScraperAPI ({tier_name}) failed with status code: {api_response.status_code}. Details: {api_response.text}")
                         except Exception as ex:
                             print(f"  ScraperAPI ({tier_name}) fallback failed: {ex}")
                         
-                        # Stop escalating tiers if we successfully grabbed the text
                         if text is not None:
                             break
 
-                # --- METHOD 6 & 7: ScrapingBee Escalation ---
+                # --- METHOD 4: ScrapingBee Escalation ---
                 if text is None:
                     scrapingbee_tiers = [
                         ("Standard", {}),
@@ -223,20 +260,13 @@ def main():
                     
                     for tier_name, tier_params in scrapingbee_tiers:
                         print(f"  Falling back to ScrapingBee ({tier_name}) for {key_name}...")
-                        payload = {
-                            'api_key': SCRAPINGBEE_API_KEY,
-                            'url': url,
-                            'render_js': 'True'
-                        }
-                        # Add the premium proxy flags based on the current tier
+                        payload = {'api_key': SCRAPINGBEE_API_KEY, 'url': url, 'render_js': 'True'}
                         payload.update(tier_params)
                         
                         try:
-                            # Timeout 90s for JS rendering on proxy servers
-                            sb_response = std_requests.get('https://app.scrapingbee.com/api/v1/', params=payload, timeout=90)
-
-                            if sb_response.status_code == 200:
-                                tree = html.fromstring(sb_response.text)
+                            sb_response = std_requests.get('https://app.scrapingbee.com/api/v1/', params=payload, timeout=90) 
+                            if sb_response.status_code == 200: 
+                                tree = html.fromstring(sb_response.content)
                                 clean_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
                                 nodes = tree.xpath(clean_xpath)
                                 if nodes:
@@ -244,21 +274,95 @@ def main():
                                 else:
                                     print(f"  XPath '{clean_xpath}' not found in ScrapingBee ({tier_name}) HTML payload.")
                             else:
-                                print(f"  ScrapingBee ({tier_name}) failed with status code: {sb_response.status_code}.")
-                                sys.stdout.write(sb_response.text + "\n")
+                                print(f"  ScrapingBee ({tier_name}) failed with status code: {sb_response.status_code}. Details: {sb_response.text}")
                         except Exception as ex:
                             print(f"  ScrapingBee ({tier_name}) fallback failed: {ex}")
                             
-                        # Stop escalating tiers if we successfully grabbed the text
                         if text is not None:
                             break
 
-            # --- VALIDATION & SAVE ---
+                # --- METHOD 5: ZenRows ---
+                if text is None:
+                    print(f"  Falling back to ZenRows for {key_name}...")
+                    payload = {'apikey': ZENROWS_API_KEY, 'url': url, 'js_render': 'true', 'premium_proxy': 'true'}
+                    try:
+                        zr_response = std_requests.get('https://api.zenrows.com/v1/', params=payload, timeout=90)
+                        if zr_response.status_code == 200:
+                            tree = html.fromstring(zr_response.content)
+                            clean_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
+                            nodes = tree.xpath(clean_xpath)
+                            if nodes:
+                                text = nodes[0] if isinstance(nodes[0], str) else nodes[0].text_content()
+                            else:
+                                print(f"  XPath '{clean_xpath}' not found in ZenRows HTML payload.")
+                        else:
+                            print(f"  ZenRows failed with status code: {zr_response.status_code}. Details: {zr_response.text}")
+                    except Exception as ex:
+                        print(f"  ZenRows fallback failed: {ex}")
+
+                # --- METHOD 6: ScrapingAnt ---
+                if text is None:
+                    print(f"  Falling back to ScrapingAnt for {key_name}...")
+                    payload = {'url': url, 'browser': 'true'}
+                    headers = {'x-api-key': SCRAPINGANT_API_KEY}
+                    try:
+                        sa_response = std_requests.get('https://api.scrapingant.com/v2/general', params=payload, headers=headers, timeout=90)
+                        if sa_response.status_code == 200:
+                            tree = html.fromstring(sa_response.content)
+                            clean_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
+                            nodes = tree.xpath(clean_xpath)
+                            if nodes:
+                                text = nodes[0] if isinstance(nodes[0], str) else nodes[0].text_content()
+                            else:
+                                print(f"  XPath '{clean_xpath}' not found in ScrapingAnt HTML payload.")
+                        else:
+                            print(f"  ScrapingAnt failed with status code: {sa_response.status_code}. Details: {sa_response.text}")
+                    except Exception as ex:
+                        print(f"  ScrapingAnt fallback failed: {ex}")
+
+                # --- METHOD 7: Scrapingdog ---
+                if text is None:
+                    print(f"  Falling back to Scrapingdog for {key_name}...")
+                    payload = {'api_key': SCRAPINGDOG_API_KEY, 'url': url, 'dynamic': 'true'}
+                    try:
+                        sd_response = std_requests.get('https://api.scrapingdog.com/scrape', params=payload, timeout=90)
+                        if sd_response.status_code == 200:
+                            tree = html.fromstring(sd_response.content)
+                            clean_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
+                            nodes = tree.xpath(clean_xpath)
+                            if nodes:
+                                text = nodes[0] if isinstance(nodes[0], str) else nodes[0].text_content()
+                            else:
+                                print(f"  XPath '{clean_xpath}' not found in Scrapingdog HTML payload.")
+                        else:
+                            print(f"  Scrapingdog failed with status code: {sd_response.status_code}. Details: {sd_response.text}")
+                    except Exception as ex:
+                        print(f"  Scrapingdog fallback failed: {ex}")
+
+                # --- METHOD 8: Scrape.do ---
+                if text is None:
+                    print(f"  Falling back to Scrape.do for {key_name}...")
+                    payload = {'token': SCRAPEDO_API_KEY, 'url': url, 'render': 'true'}
+                    try:
+                        sdo_response = std_requests.get('https://api.scrape.do/', params=payload, timeout=90)
+                        if sdo_response.status_code == 200:
+                            tree = html.fromstring(sdo_response.content)
+                            clean_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
+                            nodes = tree.xpath(clean_xpath)
+                            if nodes:
+                                text = nodes[0] if isinstance(nodes[0], str) else nodes[0].text_content()
+                            else:
+                                print(f"  XPath '{clean_xpath}' not found in Scrape.do HTML payload.")
+                        else:
+                            print(f"  Scrape.do failed with status code: {sdo_response.status_code}. Details: {sdo_response.text}")
+                    except Exception as ex:
+                        print(f"  Scrape.do fallback failed: {ex}")
+
+            # ==========================================
+            # VALIDATION & SAVE
+            # ==========================================
             if text is not None:
-                # Strip spaces, remove leading '+' or '$', remove trailing '%', and strip any resulting spaces
                 text = text.strip().lstrip('+$').rstrip('%').strip()
-                
-                # Floating-point validation block
                 is_positive_float = False
                 try:
                     parsed_value = float(text)
@@ -266,7 +370,7 @@ def main():
                         is_positive_float = True
                 except ValueError:
                     pass
-                
+                 
                 if is_positive_float:
                     existing_data[key_name] = {"date": today, "value": text}
                     print(f"  Success: Extracted '{text}' for {key_name}.")
@@ -275,11 +379,12 @@ def main():
             else:
                 print(f"  FATAL: Failed to extract data for {key_name} after exhausting all fallback methods. Skipping file update to preserve old data.")
 
+        # Close persistent browser context when done
         context.close()
 
-    # Write aggregated data out as CSV
+    # Write aggregated data out to CSV
     try:
-        with open(data_out_file, 'w', newline='') as out_f:
+        with open(data_out_file, 'w', newline='', encoding='utf-8') as out_f:
             writer = csv.writer(out_f)
             for fund, info in existing_data.items():
                 writer.writerow([fund, info["date"], info["value"]])
