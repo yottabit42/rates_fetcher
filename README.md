@@ -5,14 +5,18 @@ A robust web scraping automation project designed to extract data points (such a
 ## Overview
 
 The system consists of two main components:
+
 1. **Scraper:** A Python script (`scrape.py`) that parses a TSV file (`targets.tsv`), navigates to specific URLs, evaluates XPaths within the browser or HTML context, and writes the output to a CSV file. 
+    - **Smart Skipping:** The script checks the last updated date of existing records and skips targets that have already been successfully scraped today (respecting the `SCRAPER_TZ` timezone).
     - **Waterfall Architecture:** To ensure reliable data retrieval against strict bot protections (like Akamai), the scraper employs a sequential fallback mechanism:
-        1. **Fidelity Fast Path:** Direct JSON API extraction for supported Fidelity symbols.
-        2. **Playwright:** Headless Chromium browser mimicking a localized user profile.
-        3. **curl_cffi:** TLS/JA3 fingerprint spoofing (impersonating Chrome).
+        1. **Fidelity Fast Path:** Direct JSON API extraction for any `fidelity.com` URL.
+        2. **curl_cffi:** TLS/JA3 fingerprint spoofing (impersonating Chrome).
+        3. **Playwright:** Headless Chromium browser mimicking a localized user profile.
         4. **ScraperAPI Escalation:** Iterates through Standard, Premium, and Ultra Premium residential proxy tiers.
-        5. **ScrapingBee Escalation:** Iterates through Standard and Premium Proxy tiers as an absolute last resort.
+        5. **ScrapingBee Escalation:** Iterates through Standard and Premium Proxy tiers.
+        6. **Additional API Fallbacks:** Sequentially falls back to ZenRows, ScrapingAnt, Scrapingdog, and Scrape.do as an absolute last resort.
     - **Validation:** The script automatically cleans the extracted data (trimming leading `+` and `$`, and trailing `%` characters) and validates the result as a positive floating-point number before updating the previous records.
+
 2. **Server:** A custom Python web server (`server.py`) that securely serves only the generated output CSV file, by default on port 57275. It actively blocks path traversal attacks and prevents access to source code or configuration files.
 
 ## Project Structure
@@ -21,7 +25,7 @@ The system consists of two main components:
 - `run_scraper.sh`: Bash entry point to install dependencies and execute the scraper.
 - `server.py`: Secure Python web server to host outputs.
 - `run_server.sh`: Bash entry point to start the web server.
-- `targets.tsv`: TSV file containing target mappings in the format `Filename\tURL\tXPath`.
+- `targets.tsv`: TSV file containing target mappings in the format `Filename\\tURL\\tXPath`.
 - `Dockerfile` & `docker-compose.yml`: Containerization configuration.
 - `.env` (User created): Holds environmental variables and API keys for proxy services.
 
@@ -29,11 +33,23 @@ The system consists of two main components:
 
 This project can be run either locally on your host machine or via Docker Compose. 
 
-### API Keys
-To utilize the proxy fallback mechanisms (ScraperAPI and ScrapingBee), you must provide your API keys via environment variables. Create a `.env` file or export them directly in your shell:
+### Environment Variables & API Keys
+
+To utilize the proxy fallback mechanisms and ensure accurate daily skipping, you should provide your API keys and local timezone via environment variables. Create a `.env` file or export them directly in your shell:
+
 ```bash
+# Core API Keys
 SCRAPER_API_KEY="your_scraperapi_key"
 SCRAPINGBEE_API_KEY="your_scrapingbee_key"
+
+# Additional Fallback API Keys
+ZENROWS_API_KEY="your_zenrows_key"
+SCRAPINGANT_API_KEY="your_scrapingant_key"
+SCRAPINGDOG_API_KEY="your_scrapingdog_key"
+SCRAPEDO_API_KEY="your_scrapedo_key"
+
+# Timezone Configuration (Prevents UTC mismatch for daily skip evaluations)
+SCRAPER_TZ="America/Chicago" 
 ```
 
 ### Running Locally
@@ -49,9 +65,7 @@ SCRAPINGBEE_API_KEY="your_scrapingbee_key"
    Outputs will be saved as a CSV file named `data.out` in the current directory, with the following field order: fund key, date of successful retrieval, rate.
 
    #### Advanced Usage (Specific Targets)
-
    If you only want to update specific keys without re-scraping the entire file, you can run the Python script directly. The script requires your targets file as the first argument, followed by any specific keys you want to isolate:
-
    ```bash
    # Run for all targets in the file
    python3 scrape.py targets.tsv
@@ -70,13 +84,11 @@ SCRAPINGBEE_API_KEY="your_scrapingbee_key"
 ### Running via Docker Compose
 
 The project includes a `docker-compose.yml` that:
-
   1. Maps the host directory defined in the `${DATA_PATH}` environmental variable to `/app` inside the containers. Ensure you place these project files in that directory on your host, or modify the volume paths in the `docker-compose.yml` to match your local directory structure.
   2. Maps the internal and external network ports defined in the `${INT_PORT}` and `${EXT_PORT}` environmental variables, respectively. Port 57275 is used by default if the environmental variable is undefined.
-  3. Passes the required `SCRAPER_API_KEY` and `SCRAPINGBEE_API_KEY` environment variables to the container environment.
+  3. Passes the required API keys (`SCRAPER_API_KEY`, etc.) and `SCRAPER_TZ` variables to the container environment.
 
 #### Traefik Setup
-
 This `docker-compose.yml` file is configured with routing labels for a Traefik reverse proxy. It expects an external network named `proxy` to exist. The proxy domain is set to the `${TRAEFIK_HOST}` environmental variable.
 
 1. **Deploy the Stack:**
@@ -91,7 +103,7 @@ This `docker-compose.yml` file is configured with routing labels for a Traefik r
    ```
 
 3. **Scraper Schedule:**
-   The `scraper` will run automatically the moment the container starts, and it's also scheduled via `cron` to run every day at noon (in the local container timezone, typically UTC). Output will be saved to your mounted host directory.
+   The `scraper` will run automatically the moment the container starts, and it's also scheduled via `cron` to run every day at noon. The date tracking for daily skips will strictly adhere to the timezone defined in the `SCRAPER_TZ` variable. Output will be saved to your mounted host directory.
 
 ## Licensing
 
