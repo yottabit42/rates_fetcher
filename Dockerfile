@@ -22,4 +22,4 @@ RUN echo "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:
 RUN chmod 0644 /etc/cron.d/scraper-cron
 
 # On container start, run the scraper once in the background, then start cron in the foreground
-CMD bash -c "cd /app && bash ./run_scraper.sh 2>&1 | tee -a /app/scraper.log > /proc/1/fd/1 & exec cron -f"
+CMD bash -c "cd /app && bash ./run_scraper.sh 2>&1 | tee /app/scraper.log > /proc/1/fd/1 & exec cron -f"
