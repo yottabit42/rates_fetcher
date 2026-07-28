@@ -321,28 +321,40 @@ def main():
                     except Exception as ex:
                         print(f"  ZenRows fallback failed: {ex}")
 
-            # --- METHOD 6: ScrapingAnt ---
+            # --- METHOD 6: ScrapingAnt Escalation ---
             if text is None:
                 if SCRAPINGANT_API_KEY in [None, "", "YOUR_SCRAPINGANT_API_KEY"]:
                     print(f"  Skipping ScrapingAnt: API key not provided.")
                 else:
-                    print(f"  Falling back to ScrapingAnt for {key_name}...")
-                    payload = {'url': url, 'browser': 'true'}
-                    headers = {'x-api-key': SCRAPINGANT_API_KEY}
-                    try:
-                        sa_response = std_requests.get('https://api.scrapingant.com/v2/general', params=payload, headers=headers, timeout=90)
-                        if sa_response.status_code == 200:
-                            tree = html.fromstring(sa_response.content)
-                            clean_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
-                            nodes = tree.xpath(clean_xpath)
-                            if nodes:
-                                text = nodes[0] if isinstance(nodes[0], str) else nodes[0].text_content()
+                    scrapingant_tiers = [
+                        ("Standard", {'browser': 'true'}),
+                        ("Residential Proxy", {'browser': 'true', 'proxy_type': 'residential'}),
+                        ("US Residential Proxy", {'browser': 'true', 'proxy_type': 'residential', 'proxy_country': 'US'})
+                    ]
+                    
+                    for tier_name, tier_params in scrapingant_tiers:
+                        print(f"  Falling back to ScrapingAnt ({tier_name}) for {key_name}...")
+                        payload = {'url': url}
+                        payload.update(tier_params)
+                        headers = {'x-api-key': SCRAPINGANT_API_KEY}
+                        
+                        try:
+                            sa_response = std_requests.get('https://api.scrapingant.com/v2/general', params=payload, headers=headers, timeout=90)
+                            if sa_response.status_code == 200:
+                                tree = html.fromstring(sa_response.content)
+                                clean_xpath = re.sub(r'/text\(\)(\[\d+\])?$', '', xpath)
+                                nodes = tree.xpath(clean_xpath)
+                                if nodes:
+                                    text = nodes[0] if isinstance(nodes[0], str) else nodes[0].text_content()
+                                else:
+                                    print(f"  XPath '{clean_xpath}' not found in ScrapingAnt ({tier_name}) HTML payload.")
                             else:
-                                print(f"  XPath '{clean_xpath}' not found in ScrapingAnt HTML payload.")
-                        else:
-                            print(f"  ScrapingAnt failed with status code: {sa_response.status_code}. Details: {sa_response.text}")
-                    except Exception as ex:
-                        print(f"  ScrapingAnt fallback failed: {ex}")
+                                print(f"  ScrapingAnt ({tier_name}) failed with status code: {sa_response.status_code}. Details: {sa_response.text}")
+                        except Exception as ex:
+                            print(f"  ScrapingAnt ({tier_name}) fallback failed: {ex}")
+                            
+                        if text is not None:
+                            break
 
             # --- METHOD 7: Scrapingdog ---
             if text is None:
