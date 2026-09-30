@@ -1,10 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -e
 
-# Ensure playwright is installed (already in Docker, but keeping for standalone usage)
-pip install rebrowser-playwright curl_cffi lxml beautifulsoup4 requests
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}"
 
-# Ensure chromium is installed for playwright (using --with-deps for linux environments if not in Docker)
-python3 -m rebrowser_playwright install --with-deps chromium
+TARGETS_FILE="${1:-targets.tsv}"
+shift || true
 
-# Run the python script
-python3 scrape.py targets.tsv
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting fund scraper run for targets: ${TARGETS_FILE}"
+python3 scrape.py "${TARGETS_FILE}" "$@"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Fund scraper run completed successfully."
