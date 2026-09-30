@@ -18,12 +18,12 @@ Rather than relying on paid third-party scraping APIs, `scrape.py` implements a 
    - High-speed TLS/JA3 browser-impersonating HTTP client that fetches page payloads without headless browser overhead and bypasses anti-bot challenges (e.g. Cloudflare, Akamai):
      - **Vanguard:** Extracts `secYield` or `compoundYieldPct` directly from embedded page JSON state, bypassing client-side Shadow DOM rendering.
      - **WisdomTree:** Extracts 30-day SEC yield from semantic card structures and embedded state.
-     - **iShares:** Extracts 30-Day SEC yield from structured JSON-LD and Walrus data attributes, or Yield to Maturity (`fundamentalsAndRisk-weightedAvgYieldToMaturity-data`) for TIPS funds.
+     - **iShares:** Extracts 30-Day SEC yield from structured JSON-LD and Walrus data attributes by default (use the `scrape` override flag in `targets.tsv` to target specific elements such as Yield to Maturity).
 3. **Method 3: `curl_cffi` HTTP Impersonation with XPath**
    - Evaluates target XPaths from `targets.tsv` using `lxml` against the HTML payload returned by `curl_cffi`.
-4. **Method 4: `rebrowser-playwright` with Shadow-DOM Traversal**
+4. **Method 4: `rebrowser-playwright` Locator**
    - Headless Chromium browser context with patched CDP leak protections to defeat bot detection.
-   - Evaluates target XPaths and includes an automated Shadow DOM piercing JavaScript query to penetrate custom Web Component boundaries (such as Vanguard's `fds-*` components).
+   - Evaluates target XPaths from `targets.tsv` in a headless browser when HTTP impersonation fails or pages require client-side execution.
 5. **Method 5: Selenium WebDriver Fallback**
    - Headless Chrome driver with anti-automation flags suppressed (`--disable-blink-features=AutomationControlled`) as an ultimate fallback if Playwright or HTTP methods are blocked.
 
