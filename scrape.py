@@ -174,7 +174,7 @@ def main():
                 except Exception as ex:
                     html_content = None
 
-            if text is None and html_content:
+            if not override_flag and text is None and html_content:
                 # 2A. Vanguard in-page JSON state
                 if "investor.vanguard.com" in url:
                     unescaped = html_lib.unescape(html_content)
@@ -202,29 +202,15 @@ def main():
 
                 # 2C. iShares JSON-LD & Walrus data attributes
                 if text is None and "ishares.com" in url:
-                    # For TIPS funds: Yield to Maturity / Real Yield
-                    if key_name.startswith("IBI") or "term-tips-etf" in url:
-                        m = re.search(r'data-id="fundamentalsAndRisk-weightedAvgYieldToMaturity-data"[^>]*>([0-9.]+)%?<', html_content)
+                    m = re.search(r'30 Day SEC Yield as of",\s*"value"\s*:\s*"([0-9.]+)%?"', html_content)
+                    if m:
+                        text = m.group(1)
+                        print(f"  iShares JSON-LD SEC Yield succeeded for {key_name}: {text}")
+                    else:
+                        m = re.search(r'data-id="fundamentalsAndRisk-thirtyDaySecYield-data"[^>]*>([0-9.]+)%?<', html_content)
                         if m:
                             text = m.group(1)
-                            print(f"  iShares TIPS Yield to Maturity succeeded for {key_name}: {text}")
-                        else:
-                            m = re.search(r'data-id="fundamentalsAndRisk-realYield-data"[^>]*>([0-9.]+)%?<', html_content)
-                            if m:
-                                text = m.group(1)
-                                print(f"  iShares TIPS Real Yield succeeded for {key_name}: {text}")
-
-                    # Standard 30 Day SEC Yield in JSON-LD
-                    if text is None:
-                        m = re.search(r'30 Day SEC Yield as of",\s*"value"\s*:\s*"([0-9.]+)%?"', html_content)
-                        if m:
-                            text = m.group(1)
-                            print(f"  iShares JSON-LD SEC Yield succeeded for {key_name}: {text}")
-                        else:
-                            m = re.search(r'data-id="fundamentalsAndRisk-thirtyDaySecYield-data"[^>]*>([0-9.]+)%?<', html_content)
-                            if m:
-                                text = m.group(1)
-                                print(f"  iShares Walrus SEC Yield succeeded for {key_name}: {text}")
+                            print(f"  iShares Walrus SEC Yield succeeded for {key_name}: {text}")
 
             # =========================================================
             # METHOD 3: curl_cffi HTTP IMPERSONATION WITH XPATH
@@ -259,29 +245,8 @@ def main():
                         if val and val.strip():
                             text = val.strip()
                             print(f"  Playwright locator succeeded for {key_name}: {text}")
-                    except Exception:
-                        pass
-
-                    if text is None:
-                        shadow_val = page.evaluate("""() => {
-                            function queryShadow(root, selector) {
-                                if (!root) return null;
-                                const el = root.querySelector(selector);
-                                if (el) return el;
-                                for (const child of root.querySelectorAll('*')) {
-                                    if (child.shadowRoot) {
-                                        const found = queryShadow(child.shadowRoot, selector);
-                                        if (found) return found;
-                                    }
-                                }
-                                return null;
-                            }
-                            const el = queryShadow(document, '[data-id*="thirtyDaySecYield"], [data-id*="weightedAvgYieldToMaturity"], fds-info-text-block p, .typ-h3');
-                            return el && el.textContent ? el.textContent.trim() : null;
-                        }""")
-                        if shadow_val and shadow_val.strip():
-                            text = shadow_val.strip()
-                            print(f"  Playwright Shadow DOM evaluation succeeded for {key_name}: {text}")
+                    except Exception as e:
+                        print(f"  Playwright locator failed for {key_name}: {e}")
                 except Exception as e:
                     print(f"  Playwright failed for {key_name}: {e}")
 
@@ -314,29 +279,8 @@ def main():
                         if elem and elem.text.strip():
                             text = elem.text.strip()
                             print(f"  Selenium XPath succeeded for {key_name}: {text}")
-                    except Exception:
-                        pass
-
-                    if text is None:
-                        val = selenium_driver.execute_script("""
-                            function queryShadow(root, selector) {
-                                if (!root) return null;
-                                const el = root.querySelector(selector);
-                                if (el) return el;
-                                for (const child of root.querySelectorAll('*')) {
-                                    if (child.shadowRoot) {
-                                        const found = queryShadow(child.shadowRoot, selector);
-                                        if (found) return found;
-                                    }
-                                }
-                                return null;
-                            }
-                            const el = queryShadow(document, '[data-id*="thirtyDaySecYield"], [data-id*="weightedAvgYieldToMaturity"], fds-info-text-block p, .typ-h3');
-                            return el ? el.textContent.trim() : null;
-                        """)
-                        if val and str(val).strip():
-                            text = str(val).strip()
-                            print(f"  Selenium Shadow DOM evaluation succeeded for {key_name}: {text}")
+                    except Exception as e:
+                        print(f"  Selenium XPath failed for {key_name}: {e}")
                 except Exception as e:
                     print(f"  Selenium failed for {key_name}: {e}")
 
