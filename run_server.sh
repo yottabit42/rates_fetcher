@@ -1,6 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -e
 
-# Start the simple and secure web server to serve .txt output files
-# You can pass a custom port as the first argument, defaults to 57275
-PORT=${1:-57275}
-python3 server.py "$PORT"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}"
+
+PORT="${1:-${INT_PORT:-57275}}"
+
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Starting secure fund rates server on port ${PORT}..."
+exec python3 server.py "${PORT}"
