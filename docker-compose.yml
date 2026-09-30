@@ -4,8 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      - SCRAPER_API_KEY=${SCRAPER_API_KEY}
-      - SCRAPINGBEE_API_KEY=${SCRAPINGBEE_API_KEY}
+      - SCRAPER_TZ=${SCRAPER_TZ:-America/Chicago}
     # Scripts, input, and output files.
     volumes:
       - ${DATA_PATH}:/app
@@ -13,6 +12,8 @@ services:
   server:
     image: python:3.12-slim
     working_dir: /app
+    environment:
+      - INT_PORT=${INT_PORT:-57275}
     volumes:
       - ${DATA_PATH}:/app
     # Ports do not need exposed when using Traefik.
@@ -21,7 +22,7 @@ services:
     command:
       - bash
       - ./run_server.sh
-      - ${INT_PORT}
+      - ${INT_PORT:-57275}
     restart: unless-stopped
     labels:
       - traefik.enable=true
